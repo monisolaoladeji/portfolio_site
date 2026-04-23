@@ -1,0 +1,13 @@
+{
+  "ADMIN_USERNAME": "admin",
+  "ADMIN_PASSWORD": "change-me-now",
+  "SECRET_KEY": "change-this-secret-key",
+  "SMTP_ENABLED": false,
+  "SMTP_HOST": "smtp.gmail.com",
+  "SMTP_PORT": 587,
+  "SMTP_USERNAME": "",
+  "SMTP_PASSWORD": "",
+  "SMTP_USE_TLS": true,
+  "NOTIFY_TO_EMAIL": "",
+  "NOTIFY_FROM_EMAIL": ""
+}

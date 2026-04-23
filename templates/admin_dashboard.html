@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <a href="/" class="logo">Portfolio Admin</a>
+      <div class="admin-actions">
+        <span class="admin-user">Signed in as {{ admin_username }}</span>
+        <form method="post" action="/admin/logout">
+          <button class="btn btn-outline" type="submit">Logout</button>
+        </form>
+      </div>
+    </div>
+  </header>
+
+  <main class="container section">
+    <h1 class="admin-title">Private Dashboard</h1>
+    <p class="admin-subtext">Only admins can update profile photo and projects.</p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="flash-list">
+      {% for category, message in messages %}
+      <p class="flash {{ category }}">{{ message }}</p>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    <section class="admin-panel">
+      <h2>Profile Photo</h2>
+      <div class="about-layout">
+        <div class="profile-photo-card">
+          {% if profile_photo_path %}
+          <img class="profile-preview" src="{{ url_for('static', filename=profile_photo_path) }}" alt="Current profile photo">
+          {% else %}
+          <img class="profile-preview" src="https://via.placeholder.com/260x260/121936/e9eeff?text=No+Photo" alt="No profile photo">
+          {% endif %}
+        </div>
+        <form class="contact-form" method="post" action="/admin/profile-photo" enctype="multipart/form-data">
+          <label>
+            Upload new profile photo
+            <input type="file" name="profile_photo" accept="image/*" required>
+          </label>
+          <button class="btn btn-primary" type="submit">Save Profile Photo</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="admin-panel">
+      <h2>Add New Project</h2>
+      <form class="contact-form" method="post" action="/admin/projects/create" enctype="multipart/form-data">
+        <label>Project Title <input type="text" name="title" required></label>
+        <label>Short Description <textarea name="description" rows="3" required></textarea></label>
+        <label>Technologies (comma-separated) <input type="text" name="technologies" required></label>
+        <label>GitHub URL <input type="url" name="github_url" placeholder="https://github.com/yourname/project"></label>
+        <label>Live Demo URL <input type="url" name="demo_url" placeholder="https://your-demo-link.com"></label>
+        <label>Sort Order <input type="number" name="sort_order" value="999"></label>
+        <label>Project Screenshot <input type="file" name="screenshot" accept="image/*"></label>
+        <button class="btn btn-primary" type="submit">Add Project</button>
+      </form>
+    </section>
+
+    <section class="admin-panel">
+      <h2>Public Contact Details</h2>
+      <form class="contact-form" method="post" action="/admin/contact">
+        <label>Email <input type="email" name="contact_email" value="{{ settings.get('contact_email', '') }}"></label>
+        <label>Phone <input type="text" name="contact_phone" value="{{ settings.get('contact_phone', '') }}"></label>
+        <label>Location <input type="text" name="contact_location" value="{{ settings.get('contact_location', '') }}"></label>
+        <label>LinkedIn URL <input type="url" name="contact_linkedin" value="{{ settings.get('contact_linkedin', '') }}"></label>
+        <label>GitHub URL <input type="url" name="contact_github" value="{{ settings.get('contact_github', '') }}"></label>
+        <button class="btn btn-primary" type="submit">Save Contact Details</button>
+      </form>
+    </section>
+
+    <section class="admin-panel">
+      <h2>Visitor Messages</h2>
+      <div class="admin-project-list">
+        {% if visitor_messages %}
+        {% for msg in visitor_messages %}
+        <article class="project-card {{ 'message-unread' if not msg['is_read'] else '' }}">
+          <h3>{{ msg["sender_name"] }}</h3>
+          <p><strong>Email:</strong> <a href="mailto:{{ msg['sender_email'] }}">{{ msg["sender_email"] }}</a></p>
+          <p><strong>Sent:</strong> {{ msg["created_at"] }}</p>
+          <p>{{ msg["message_body"] }}</p>
+          <div class="card-actions">
+            {% if not msg["is_read"] %}
+            <form method="post" action="/admin/messages/{{ msg['id'] }}/read">
+              <button class="btn btn-primary" type="submit">Mark as Read</button>
+            </form>
+            {% endif %}
+            <form method="post" action="/admin/messages/{{ msg['id'] }}/delete" onsubmit="return confirm('Delete this message?');">
+              <button class="btn btn-outline" type="submit">Delete</button>
+            </form>
+          </div>
+        </article>
+        {% endfor %}
+        {% else %}
+        <p>No visitor messages yet.</p>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="admin-panel">
+      <h2>Edit Existing Projects</h2>
+      <div class="admin-project-list">
+        {% for project in projects %}
+        <article class="project-card">
+          {% if project["screenshot_path"] %}
+          <img class="project-shot" src="{{ url_for('static', filename=project['screenshot_path']) }}" alt="{{ project['title'] }} screenshot">
+          {% endif %}
+          <form class="contact-form" method="post" action="/admin/projects/{{ project['id'] }}/update" enctype="multipart/form-data">
+            <label>Project Title <input type="text" name="title" value="{{ project['title'] }}" required></label>
+            <label>Short Description <textarea name="description" rows="3" required>{{ project["description"] }}</textarea></label>
+            <label>Technologies <input type="text" name="technologies" value="{{ project['technologies'] }}" required></label>
+            <label>GitHub URL <input type="url" name="github_url" value="{{ project['github_url'] }}"></label>
+            <label>Live Demo URL <input type="url" name="demo_url" value="{{ project['demo_url'] }}"></label>
+            <label>Sort Order <input type="number" name="sort_order" value="{{ project['sort_order'] }}"></label>
+            <label>Replace Screenshot <input type="file" name="screenshot" accept="image/*"></label>
+            <button class="btn btn-primary" type="submit">Update Project</button>
+          </form>
+          <form method="post" action="/admin/projects/{{ project['id'] }}/delete" onsubmit="return confirm('Delete this project?');">
+            <button class="btn btn-outline" type="submit">Delete Project</button>
+          </form>
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+  </main>
+</body>
+</html>
