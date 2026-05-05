@@ -171,6 +171,18 @@ def init_db():
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS project_screenshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL,
+                image_path TEXT NOT NULL,
+                caption TEXT NOT NULL DEFAULT '',
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE
+            );
+            """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL DEFAULT ''
@@ -301,6 +313,18 @@ def send_new_message_notification(sender_name: str, sender_email: str, message_b
         return False
 
 
+def get_project_screenshots(db, project_id):
+    return db.execute(
+        """
+        SELECT id, image_path, caption, sort_order
+        FROM project_screenshots
+        WHERE project_id = ?
+        ORDER BY sort_order ASC, id ASC;
+        """,
+        (project_id,),
+    ).fetchall()
+
+
 @app.route("/")
 def index():
     db = get_db()
@@ -311,10 +335,17 @@ def index():
         ORDER BY sort_order ASC, id ASC;
         """
     ).fetchall()
+    projects_with_screenshots = []
+    for project in projects:
+        screenshots = get_project_screenshots(db, project["id"])
+        projects_with_screenshots.append({
+            **project,
+            "screenshots": screenshots
+        })
     settings = get_settings_map(db)
     return render_template(
         "index.html",
-        projects=projects,
+        projects=projects_with_screenshots,
         profile_photo_path=settings.get("profile_photo_path", ""),
         contact_email=settings.get("contact_email", ""),
         contact_phone=settings.get("contact_phone", ""),
@@ -383,6 +414,13 @@ def admin_dashboard():
         ORDER BY sort_order ASC, id ASC;
         """
     ).fetchall()
+    projects_with_screenshots = []
+    for project in projects:
+        screenshots = get_project_screenshots(db, project["id"])
+        projects_with_screenshots.append({
+            **project,
+            "screenshots": screenshots
+        })
     visitor_messages = db.execute(
         """
         SELECT id, sender_name, sender_email, message_body, created_at, is_read
@@ -393,12 +431,54 @@ def admin_dashboard():
     settings = get_settings_map(db)
     return render_template(
         "admin_dashboard.html",
-        projects=projects,
+        projects=projects_with_screenshots,
         visitor_messages=visitor_messages,
         profile_photo_path=settings.get("profile_photo_path", ""),
         settings=settings,
         admin_username=app.config["ADMIN_USERNAME"],
     )
+
+
+@app.post("/admin/projects/<int:project_id>/screenshots/add")
+@admin_required
+def add_project_screenshot(project_id: int):
+    screenshot = request.files.get("screenshot")
+    caption = (request.form.get("caption") or "").strip()
+    sort_order = int((request.form.get("sort_order") or "999").strip())
+    
+    if not screenshot or not screenshot.filename:
+        flash("Please choose a screenshot.", "error")
+        return redirect(url_for("admin_dashboard"))
+    
+    db = get_db()
+    existing = db.execute("SELECT id FROM projects WHERE id = ?;", (project_id,)).fetchone()
+    if not existing:
+        flash("Project not found.", "error")
+        return redirect(url_for("admin_dashboard"))
+    
+    try:
+        image_path = save_image(screenshot)
+    except ValueError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("admin_dashboard"))
+    
+    db.execute(
+        "INSERT INTO project_screenshots (project_id, image_path, caption, sort_order) VALUES (?, ?, ?, ?);",
+        (project_id, image_path, caption, sort_order),
+    )
+    db.commit()
+    flash("Screenshot added.", "success")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.post("/admin/projects/<int:project_id>/screenshots/<int:screenshot_id>/delete")
+@admin_required
+def delete_project_screenshot(project_id: int, screenshot_id: int):
+    db = get_db()
+    db.execute("DELETE FROM project_screenshots WHERE id = ? AND project_id = ?;", (screenshot_id, project_id))
+    db.commit()
+    flash("Screenshot deleted.", "success")
+    return redirect(url_for("admin_dashboard"))
 
 
 @app.post("/admin/profile-photo")

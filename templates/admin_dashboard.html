@@ -125,9 +125,39 @@
             <label>GitHub URL <input type="url" name="github_url" value="{{ project['github_url'] }}"></label>
             <label>Live Demo URL <input type="url" name="demo_url" value="{{ project['demo_url'] }}"></label>
             <label>Sort Order <input type="number" name="sort_order" value="{{ project['sort_order'] }}"></label>
-            <label>Replace Screenshot <input type="file" name="screenshot" accept="image/*"></label>
+            <label>Replace Main Screenshot <input type="file" name="screenshot" accept="image/*"></label>
             <button class="btn btn-primary" type="submit">Update Project</button>
           </form>
+          
+          <div class="screenshot-management">
+            <h3>Project Screenshots</h3>
+            <form class="contact-form" method="post" action="/admin/projects/{{ project['id'] }}/screenshots/add" enctype="multipart/form-data">
+              <label>Screenshot Image <input type="file" name="screenshot" accept="image/*" required></label>
+              <label>Caption (optional) <input type="text" name="caption" placeholder="Describe this screenshot"></label>
+              <label>Sort Order <input type="number" name="sort_order" value="999"></label>
+              <button class="btn btn-primary" type="submit">Add Screenshot</button>
+            </form>
+            
+            {% if project.screenshots %}
+            <div class="screenshot-list">
+              {% for screenshot in project.screenshots %}
+              <div class="screenshot-admin-item">
+                <img src="{{ url_for('static', filename=screenshot['image_path']) }}" alt="Screenshot">
+                <div class="screenshot-admin-details">
+                  {% if screenshot['caption'] %}
+                  <p><strong>Caption:</strong> {{ screenshot['caption'] }}</p>
+                  {% endif %}
+                  <p><strong>Sort Order:</strong> {{ screenshot['sort_order'] }}</p>
+                  <form method="post" action="/admin/projects/{{ project['id'] }}/screenshots/{{ screenshot['id'] }}/delete" onsubmit="return confirm('Delete this screenshot?');">
+                    <button class="btn btn-outline" type="submit">Delete Screenshot</button>
+                  </form>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+          
           <form method="post" action="/admin/projects/{{ project['id'] }}/delete" onsubmit="return confirm('Delete this project?');">
             <button class="btn btn-outline" type="submit">Delete Project</button>
           </form>
