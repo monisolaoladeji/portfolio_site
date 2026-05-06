@@ -447,18 +447,24 @@ def add_project_screenshot(project_id: int):
     sort_order = int((request.form.get("sort_order") or "999").strip())
     
     if not screenshot or not screenshot.filename:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({"success": False, "message": "Please choose a screenshot."}), 400
         flash("Please choose a screenshot.", "error")
         return redirect(url_for("admin_dashboard"))
     
     db = get_db()
     existing = db.execute("SELECT id FROM projects WHERE id = ?;", (project_id,)).fetchone()
     if not existing:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({"success": False, "message": "Project not found."}), 404
         flash("Project not found.", "error")
         return redirect(url_for("admin_dashboard"))
     
     try:
         image_path = save_image(screenshot)
     except ValueError as exc:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({"success": False, "message": str(exc)}), 400
         flash(str(exc), "error")
         return redirect(url_for("admin_dashboard"))
     
@@ -467,6 +473,19 @@ def add_project_screenshot(project_id: int):
         (project_id, image_path, caption, sort_order),
     )
     db.commit()
+    
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({
+            "success": True,
+            "message": "Screenshot added.",
+            "screenshot": {
+                "id": db.execute("SELECT last_insert_rowid()").fetchone()[0],
+                "image_path": image_path,
+                "caption": caption,
+                "sort_order": sort_order
+            }
+        })
+    
     flash("Screenshot added.", "success")
     return redirect(url_for("admin_dashboard"))
 
@@ -477,6 +496,13 @@ def delete_project_screenshot(project_id: int, screenshot_id: int):
     db = get_db()
     db.execute("DELETE FROM project_screenshots WHERE id = ? AND project_id = ?;", (screenshot_id, project_id))
     db.commit()
+    
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({
+            "success": True,
+            "message": "Screenshot deleted."
+        })
+    
     flash("Screenshot deleted.", "success")
     return redirect(url_for("admin_dashboard"))
 
@@ -552,6 +578,8 @@ def update_project(project_id: int):
     screenshot = request.files.get("screenshot")
 
     if not title or not description or not technologies:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({"success": False, "message": "Title, description, and technologies are required."}), 400
         flash("Title, description, and technologies are required.", "error")
         return redirect(url_for("admin_dashboard"))
 
@@ -560,6 +588,8 @@ def update_project(project_id: int):
         "SELECT screenshot_path FROM projects WHERE id = ?;", (project_id,)
     ).fetchone()
     if not existing:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({"success": False, "message": "Project not found."}), 404
         flash("Project not found.", "error")
         return redirect(url_for("admin_dashboard"))
 
@@ -568,6 +598,8 @@ def update_project(project_id: int):
         try:
             screenshot_path = save_image(screenshot)
         except ValueError as exc:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({"success": False, "message": str(exc)}), 400
             flash(str(exc), "error")
             return redirect(url_for("admin_dashboard"))
 
@@ -589,6 +621,23 @@ def update_project(project_id: int):
         ),
     )
     db.commit()
+    
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({
+            "success": True, 
+            "message": "Project updated.",
+            "project": {
+                "id": project_id,
+                "title": title,
+                "description": description,
+                "technologies": technologies,
+                "github_url": github_url,
+                "demo_url": demo_url,
+                "sort_order": sort_order,
+                "screenshot_path": screenshot_path
+            }
+        })
+    
     flash("Project updated.", "success")
     return redirect(url_for("admin_dashboard"))
 
@@ -623,6 +672,13 @@ def update_contact_info():
     for key, value in updates.items():
         db.execute("UPDATE settings SET value = ? WHERE key = ?;", (value, key))
     db.commit()
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({
+            "success": True,
+            "message": "Contact details updated.",
+            "settings": updates
+        })
 
     flash("Contact details updated.", "success")
     return redirect(url_for("admin_dashboard"))

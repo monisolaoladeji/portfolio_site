@@ -8,6 +8,41 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+  <style>
+    .flash-list {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 1000;
+      max-width: 300px;
+    }
+    .flash {
+      padding: 12px 16px;
+      margin-bottom: 8px;
+      border-radius: 6px;
+      animation: slideIn 0.3s ease;
+    }
+    .flash.success {
+      background: #10b981;
+      color: white;
+    }
+    .flash.error {
+      background: #ef4444;
+      color: white;
+    }
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes fadeOut {
+      from { opacity: 1; }
+      to { opacity: 0; }
+    }
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  </style>
 </head>
 <body>
   <header class="site-header">
@@ -166,5 +201,182 @@
       </div>
     </section>
   </main>
+
+  <script>
+    function showFlashMessage(message, category = 'success') {
+      const flashList = document.querySelector('.flash-list');
+      const flash = document.createElement('p');
+      flash.className = `flash ${category}`;
+      flash.textContent = message;
+      flashList.appendChild(flash);
+      
+      setTimeout(() => {
+        flash.style.animation = 'fadeOut 0.3s ease forwards';
+        setTimeout(() => flash.remove(), 300);
+      }, 3000);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const projectUpdateForms = document.querySelectorAll('form[action*="/update"]');
+      
+      projectUpdateForms.forEach(form => {
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          
+          const formData = new FormData(form);
+          const submitBtn = form.querySelector('button[type="submit"]');
+          const originalText = submitBtn.textContent;
+          
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Updating...';
+          
+          try {
+            const response = await fetch(form.action, {
+              method: 'POST',
+              body: formData,
+              headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+              }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+              showFlashMessage(result.message, 'success');
+            } else {
+              showFlashMessage(result.message, 'error');
+            }
+          } catch (error) {
+            showFlashMessage('Something went wrong. Please try again.', 'error');
+          } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+          }
+        });
+      });
+
+      const contactForm = document.querySelector('form[action="/admin/contact"]');
+      if (contactForm) {
+        contactForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          
+          const formData = new FormData(contactForm);
+          const submitBtn = contactForm.querySelector('button[type="submit"]');
+          const originalText = submitBtn.textContent;
+          
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Saving...';
+          
+          try {
+            const response = await fetch('/admin/contact', {
+              method: 'POST',
+              body: formData,
+              headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+              }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+              showFlashMessage(result.message, 'success');
+            } else {
+              showFlashMessage(result.message, 'error');
+            }
+          } catch (error) {
+            showFlashMessage('Something went wrong. Please try again.', 'error');
+          } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+          }
+        });
+      }
+
+      const screenshotAddForms = document.querySelectorAll('form[action*="/screenshots/add"]');
+      screenshotAddForms.forEach(form => {
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          
+          const formData = new FormData(form);
+          const submitBtn = form.querySelector('button[type="submit"]');
+          const originalText = submitBtn.textContent;
+          
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Adding...';
+          
+          try {
+            const response = await fetch(form.action, {
+              method: 'POST',
+              body: formData,
+              headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+              }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+              showFlashMessage(result.message, 'success');
+              form.reset();
+            } else {
+              showFlashMessage(result.message, 'error');
+            }
+          } catch (error) {
+            showFlashMessage('Something went wrong. Please try again.', 'error');
+          } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+          }
+        });
+      });
+
+      const screenshotDeleteForms = document.querySelectorAll('form[action*="/screenshots/"][action*="/delete"]');
+      screenshotDeleteForms.forEach(form => {
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          
+          const confirmed = confirm('Delete this screenshot?');
+          if (!confirmed) return;
+          
+          const submitBtn = form.querySelector('button[type="submit"]');
+          const originalText = submitBtn.textContent;
+          
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Deleting...';
+          
+          try {
+            const response = await fetch(form.action, {
+              method: 'POST',
+              headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+              }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+              showFlashMessage(result.message, 'success');
+              form.closest('.screenshot-admin-item').remove();
+            } else {
+              showFlashMessage(result.message, 'error');
+            }
+          } catch (error) {
+            showFlashMessage('Something went wrong. Please try again.', 'error');
+          } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+          }
+        });
+      });
+
+      const existingFlashes = document.querySelectorAll('.flash');
+      existingFlashes.forEach(flash => {
+        setTimeout(() => {
+          flash.style.animation = 'fadeOut 0.3s ease forwards';
+          setTimeout(() => flash.remove(), 300);
+        }, 3000);
+      });
+    });
+  </script>
 </body>
 </html>

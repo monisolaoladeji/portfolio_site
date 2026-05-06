@@ -67,6 +67,9 @@ I am a junior developer passionate about creating useful web applications with P
             frontend technologies. I enjoy turning ideas into interactive products, learning best practices, and writing
             maintainable code while growing as a professional developer.
           </p>
+         <p>
+           Click on the live demo button to view test projects
+         </p>
         </div>
       </div>
     </section>
@@ -95,32 +98,46 @@ I am a junior developer passionate about creating useful web applications with P
       <div class="projects-grid">
         {% for project in projects %}
         <article class="project-card">
+          {% set combined_screenshots = [] %}
+          {% if project.screenshot_path %}
+            {% set _ = combined_screenshots.append({"image_path": project.screenshot_path, "caption": "Main screenshot"}) %}
+          {% endif %}
           {% if project.screenshots %}
-          <div class="screenshots-gallery">
-            {% for screenshot in project.screenshots %}
-            <div class="screenshot-item">
-              <img src="{{ url_for('static', filename=screenshot['image_path']) }}" alt="{{ project['title'] }} screenshot">
-              {% if screenshot['caption'] %}
-              <p class="screenshot-caption">{{ screenshot['caption'] }}</p>
-              {% endif %}
-            </div>
+            {% for s in project.screenshots %}
+              {% set _ = combined_screenshots.append(s) %}
             {% endfor %}
+          {% endif %}
+          
+          {% if combined_screenshots %}
+          <div class="screenshots-gallery-container">
+            <div class="main-screenshot">
+              <img src="{{ url_for('static', filename=combined_screenshots[0].image_path) }}" alt="{{ project.title }} main screenshot" class="main-screenshot-img">
+            </div>
+            {% if combined_screenshots|length > 1 %}
+            <div class="screenshots-thumbnail-scroll">
+              <div class="screenshots-thumbnails">
+                {% for screenshot in combined_screenshots %}
+                <div class="thumbnail-item {% if loop.index0 == 0 %}active{% endif %}" data-index="{{ loop.index0 }}">
+                  <img src="{{ url_for('static', filename=screenshot.image_path) }}" alt="{{ project.title }} thumbnail">
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+            {% endif %}
           </div>
-          {% elif project["screenshot_path"] %}
-          <img class="project-shot" src="{{ url_for('static', filename=project['screenshot_path']) }}" alt="{{ project['title'] }} screenshot">
           {% else %}
           <div class="empty-media project-shot">Screenshots not uploaded yet.</div>
           {% endif %}
-          <h3>{{ project["title"] }}</h3>
-          <p>{{ project["description"] }}</p>
+          <h3>{{ project.title }}</h3>
+          <p>{{ project.description }}</p>
           <div class="tech-tags">
-            {% for tech in project["technologies"].split(",") %}
+            {% for tech in project.technologies.split(",") %}
             <span class="tech-tag">{{ tech.strip() }}</span>
             {% endfor %}
           </div>
           <div class="card-actions">
-            <a class="btn btn-outline" href="{{ project['github_url'] }}" target="_blank" rel="noopener noreferrer">GitHub</a>
-            <a class="btn btn-primary" href="{{ project['demo_url'] }}" target="_blank" rel="noopener noreferrer">Live Demo</a>
+            <a class="btn btn-outline" href="{{ project.github_url }}" target="_blank" rel="noopener noreferrer">GitHub</a>
+            <a class="btn btn-primary" href="{{ project.demo_url }}" target="_blank" rel="noopener noreferrer">Live Demo</a>
           </div>
         </article>
         {% endfor %}
@@ -188,6 +205,23 @@ I am a junior developer passionate about creating useful web applications with P
     menuBtn.addEventListener("click", () => siteNav.classList.toggle("open"));
     siteNav.querySelectorAll("a").forEach((link) => {
       link.addEventListener("click", () => siteNav.classList.remove("open"));
+    });
+
+    document.querySelectorAll('.screenshots-gallery-container').forEach(container => {
+      const mainImg = container.querySelector('.main-screenshot-img');
+      const thumbnails = container.querySelectorAll('.thumbnail-item');
+      
+      if (mainImg && thumbnails.length > 0) {
+        thumbnails.forEach((thumbnail, index) => {
+          thumbnail.addEventListener('click', () => {
+            const imgSrc = thumbnail.querySelector('img').src;
+            mainImg.src = imgSrc;
+            
+            thumbnails.forEach(t => t.classList.remove('active'));
+            thumbnail.classList.add('active');
+          });
+        });
+      }
     });
   </script>
 </body>
