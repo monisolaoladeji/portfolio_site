@@ -231,7 +231,7 @@
           submitBtn.textContent = 'Updating...';
           
           try {
-            const response = await fetch(form.action, {
+            const response = await fetch('https://portfolio-site-ot7v.onrender.com' + form.action, {
               method: 'POST',
               body: formData,
               headers: {
@@ -268,7 +268,7 @@
           submitBtn.textContent = 'Saving...';
           
           try {
-            const response = await fetch('/admin/contact', {
+            const response = await fetch('https://portfolio-site-ot7v.onrender.com/admin/contact', {
               method: 'POST',
               body: formData,
               headers: {
@@ -305,7 +305,7 @@
           submitBtn.textContent = 'Adding...';
           
           try {
-            const response = await fetch(form.action, {
+            const response = await fetch('https://portfolio-site-ot7v.onrender.com' + form.action, {
               method: 'POST',
               body: formData,
               headers: {
@@ -345,7 +345,7 @@
           submitBtn.textContent = 'Deleting...';
           
           try {
-            const response = await fetch(form.action, {
+            const response = await fetch('https://portfolio-site-ot7v.onrender.com' + form.action, {
               method: 'POST',
               headers: {
                 'X-Requested-With': 'XMLHttpRequest'

@@ -18,6 +18,7 @@ from flask import (
     session,
     url_for,
 )
+from flask_cors import CORS
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -91,6 +92,8 @@ app.config["SMTP_PASSWORD"] = local_config["SMTP_PASSWORD"]
 app.config["SMTP_USE_TLS"] = bool(local_config["SMTP_USE_TLS"])
 app.config["NOTIFY_TO_EMAIL"] = local_config["NOTIFY_TO_EMAIL"]
 app.config["NOTIFY_FROM_EMAIL"] = local_config["NOTIFY_FROM_EMAIL"]
+
+CORS(app)
 
 
 DEFAULT_PROJECTS = [
@@ -711,4 +714,4 @@ init_db()
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5050)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
