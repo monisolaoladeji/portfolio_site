@@ -97,8 +97,8 @@
         <label>Project Title <input type="text" name="title" required></label>
         <label>Short Description <textarea name="description" rows="3" required></textarea></label>
         <label>Technologies (comma-separated) <input type="text" name="technologies" required></label>
-        <label>GitHub URL <input type="url" name="github_url" placeholder="https://github.com/yourname/project"></label>
-        <label>Live Demo URL <input type="url" name="demo_url" placeholder="https://your-demo-link.com"></label>
+        <label>GitHub URL <input type="text" name="github_url" placeholder="https://github.com/yourname/project"></label>
+        <label>Live Demo URL <input type="text" name="demo_url" placeholder="https://your-demo-link.com"></label>
         <label>Sort Order <input type="number" name="sort_order" value="999"></label>
         <label>Project Screenshot <input type="file" name="screenshot" accept="image/*"></label>
         <button class="btn btn-primary" type="submit">Add Project</button>
@@ -111,8 +111,8 @@
         <label>Email <input type="email" name="contact_email" value="{{ settings.get('contact_email', '') }}"></label>
         <label>Phone <input type="text" name="contact_phone" value="{{ settings.get('contact_phone', '') }}"></label>
         <label>Location <input type="text" name="contact_location" value="{{ settings.get('contact_location', '') }}"></label>
-        <label>LinkedIn URL <input type="url" name="contact_linkedin" value="{{ settings.get('contact_linkedin', '') }}"></label>
-        <label>GitHub URL <input type="url" name="contact_github" value="{{ settings.get('contact_github', '') }}"></label>
+        <label>LinkedIn URL <input type="text" name="contact_linkedin" value="{{ settings.get('contact_linkedin', '') }}"></label>
+        <label>GitHub URL <input type="text" name="contact_github" value="{{ settings.get('contact_github', '') }}"></label>
         <button class="btn btn-primary" type="submit">Save Contact Details</button>
       </form>
     </section>
@@ -157,8 +157,8 @@
             <label>Project Title <input type="text" name="title" value="{{ project['title'] }}" required></label>
             <label>Short Description <textarea name="description" rows="3" required>{{ project["description"] }}</textarea></label>
             <label>Technologies <input type="text" name="technologies" value="{{ project['technologies'] }}" required></label>
-            <label>GitHub URL <input type="url" name="github_url" value="{{ project['github_url'] }}"></label>
-            <label>Live Demo URL <input type="url" name="demo_url" value="{{ project['demo_url'] }}"></label>
+            <label>GitHub URL <input type="text" name="github_url" value="{{ project['github_url'] }}"></label>
+            <label>Live Demo URL <input type="text" name="demo_url" value="{{ project['demo_url'] }}"></label>
             <label>Sort Order <input type="number" name="sort_order" value="{{ project['sort_order'] }}"></label>
             <label>Replace Main Screenshot <input type="file" name="screenshot" accept="image/*"></label>
             <button class="btn btn-primary" type="submit">Update Project</button>
@@ -231,7 +231,7 @@
           submitBtn.textContent = 'Updating...';
           
           try {
-            const response = await fetch('https://portfolio-site-ot7v.onrender.com' + form.action, {
+            const response = await fetch(form.action, {
               method: 'POST',
               body: formData,
               headers: {
@@ -268,7 +268,7 @@
           submitBtn.textContent = 'Saving...';
           
           try {
-            const response = await fetch('https://portfolio-site-ot7v.onrender.com/admin/contact', {
+            const response = await fetch(contactForm.action, {
               method: 'POST',
               body: formData,
               headers: {
@@ -305,7 +305,7 @@
           submitBtn.textContent = 'Adding...';
           
           try {
-            const response = await fetch('https://portfolio-site-ot7v.onrender.com' + form.action, {
+            const response = await fetch(form.action, {
               method: 'POST',
               body: formData,
               headers: {
@@ -345,7 +345,7 @@
           submitBtn.textContent = 'Deleting...';
           
           try {
-            const response = await fetch('https://portfolio-site-ot7v.onrender.com' + form.action, {
+            const response = await fetch(form.action, {
               method: 'POST',
               headers: {
                 'X-Requested-With': 'XMLHttpRequest'
