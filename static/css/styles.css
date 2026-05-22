@@ -4,11 +4,11 @@
   --surface-soft: #fdf7fa;
   --text: #2d1f2a;
   --muted: #7a6b76;
-  --primary: #ec4899;
-  --primary-soft: #fbcfe8;
-  --primary-dark: #be185d;
-  --border: #f3e4eb;
-  --border-soft: #f9ecf2;
+  --primary: #2563eb;
+  --primary-soft: #dbeafe;
+  --primary-dark: #1d4ed8;
+  --border: #dbeafe;
+  --border-soft: #e0efff;
   --success: #22c55e;
   --error: #f87171;
   --ash: #e9e7e8;
@@ -524,6 +524,23 @@ body {
   font-size: 0.95rem;
 }
 
+.admin-link {
+  display: inline-block;
+  margin-top: 0.6rem;
+  color: #94a3b8;
+  text-decoration: none;
+  font-size: 0.85rem;
+  opacity: 0.75;
+  transition: all 0.2s ease;
+  border-bottom: 1px solid transparent;
+}
+
+.admin-link:hover {
+  opacity: 1;
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
 .admin-body {
   min-height: 100vh;
   display: grid;
@@ -587,6 +604,20 @@ body {
   margin-top: 1rem;
   padding-top: 1rem;
   border-top: 1px dashed var(--border);
+}
+
+.message-notice {
+  color: var(--muted);
+  margin-bottom: 1rem;
+  line-height: 1.55;
+}
+
+.message-empty {
+  color: #475569;
+  background: var(--ash-soft);
+  border: 1px dashed var(--border);
+  border-radius: 16px;
+  padding: 1rem 1.2rem;
 }
 
 .screenshot-list {

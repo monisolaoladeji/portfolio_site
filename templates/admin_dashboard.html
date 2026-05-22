@@ -117,8 +117,9 @@
       </form>
     </section>
 
-    <section class="admin-panel">
+    <section class="admin-panel visitor-messages-panel">
       <h2>Visitor Messages</h2>
+      <p class="message-notice">Messages sent from the public portfolio contact form appear here. This section remains visible even if there are no messages yet.</p>
       <div class="admin-project-list">
         {% if visitor_messages %}
         {% for msg in visitor_messages %}
@@ -140,7 +141,7 @@
         </article>
         {% endfor %}
         {% else %}
-        <p>No visitor messages yet.</p>
+        <div class="message-empty">No visitor messages yet. Ask someone to send a message through the portfolio contact form, then refresh this page.</div>
         {% endif %}
       </div>
     </section>
