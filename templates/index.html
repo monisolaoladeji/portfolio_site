@@ -54,7 +54,7 @@
       <div class="about-layout">
         <div class="profile-photo-card">
           {% if profile_photo_path %}
-          <img class="profile-preview" src="{{ url_for('static', filename=profile_photo_path) }}" alt="Profile photo">
+          <img class="profile-preview" src="{{ upload_url(profile_photo_path) }}" alt="Profile photo">
           {% else %}
           <div class="empty-media"></div>
           {% endif %}
@@ -110,14 +110,14 @@ I am a junior developer passionate about building impactful and user-friendly we
           {% if combined_screenshots %}
           <div class="screenshots-gallery-container">
             <div class="main-screenshot">
-              <img src="{{ url_for('static', filename=combined_screenshots[0].image_path) }}" alt="{{ project.title }} main screenshot" class="main-screenshot-img">
+              <img src="{{ upload_url(combined_screenshots[0].image_path) }}" alt="{{ project.title }} main screenshot" class="main-screenshot-img">
             </div>
             {% if combined_screenshots|length > 1 %}
             <div class="screenshots-thumbnail-scroll">
               <div class="screenshots-thumbnails">
                 {% for screenshot in combined_screenshots %}
                 <div class="thumbnail-item {% if loop.index0 == 0 %}active{% endif %}" data-index="{{ loop.index0 }}">
-                  <img src="{{ url_for('static', filename=screenshot.image_path) }}" alt="{{ project.title }} thumbnail">
+                  <img src="{{ upload_url(screenshot.image_path) }}" alt="{{ project.title }} thumbnail">
                 </div>
                 {% endfor %}
               </div>

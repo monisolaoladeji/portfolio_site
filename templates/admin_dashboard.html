@@ -76,7 +76,7 @@
       <div class="about-layout">
         <div class="profile-photo-card">
           {% if profile_photo_path %}
-          <img class="profile-preview" src="{{ url_for('static', filename=profile_photo_path) }}" alt="Current profile photo">
+          <img class="profile-preview" src="{{ upload_url(profile_photo_path) }}" alt="Current profile photo">
           {% else %}
           <img class="profile-preview" src="https://via.placeholder.com/260x260/121936/e9eeff?text=No+Photo" alt="No profile photo">
           {% endif %}
@@ -152,7 +152,7 @@
         {% for project in projects %}
         <article class="project-card">
           {% if project["screenshot_path"] %}
-          <img class="project-shot" src="{{ url_for('static', filename=project['screenshot_path']) }}" alt="{{ project['title'] }} screenshot">
+          <img class="project-shot" src="{{ upload_url(project['screenshot_path']) }}" alt="{{ project['title'] }} screenshot">
           {% endif %}
           <form class="contact-form" method="post" action="/admin/projects/{{ project['id'] }}/update" enctype="multipart/form-data">
             <label>Project Title <input type="text" name="title" value="{{ project['title'] }}" required></label>
@@ -178,7 +178,7 @@
             <div class="screenshot-list">
               {% for screenshot in project.screenshots %}
               <div class="screenshot-admin-item">
-                <img src="{{ url_for('static', filename=screenshot['image_path']) }}" alt="Screenshot">
+                <img src="{{ upload_url(screenshot['image_path']) }}" alt="Screenshot">
                 <div class="screenshot-admin-details">
                   {% if screenshot['caption'] %}
                   <p><strong>Caption:</strong> {{ screenshot['caption'] }}</p>

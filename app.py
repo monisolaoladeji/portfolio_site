@@ -15,6 +15,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_from_directory,
     session,
     url_for,
 )
@@ -275,7 +276,33 @@ def save_image(file_obj) -> str:
     filename = f"{uuid.uuid4().hex}.{ext}"
     dest_path = UPLOAD_DIR / filename
     file_obj.save(dest_path)
-    return f"uploads/{filename}"
+    return filename
+
+
+def normalize_upload_path(path: str) -> str:
+    if not path:
+        return ""
+    normalized = path.replace("\\", "/")
+    if normalized.startswith("uploads/"):
+        normalized = normalized.split("/", 1)[1]
+    return normalized
+
+
+def get_upload_url(path: str) -> str:
+    normalized = normalize_upload_path(path)
+    if not normalized:
+        return ""
+    return url_for("uploaded_file", filename=normalized)
+
+
+@app.route("/uploads/<path:filename>")
+def uploaded_file(filename: str):
+    return send_from_directory(UPLOAD_DIR, filename)
+
+
+@app.context_processor
+def utility_processor():
+    return {"upload_url": get_upload_url}
 
 
 def is_admin_logged_in() -> bool:
