@@ -18,6 +18,8 @@ This portfolio now uses Flask + SQLite so only you (admin) can edit content.
 3. Run app once:
    - `python app.py`
 4. A `local_config.json` file will be created automatically.
+
+> Note: On Render/Vercel, local SQLite and uploaded files are not guaranteed to persist after the site sleeps or redeploys. For production, use a persistent database service or a platform-provided persistent disk, and set `PORTFOLIO_DB_PATH` to that path if available.
 5. Open `local_config.json` and set your own values:
    - `ADMIN_USERNAME`
    - `ADMIN_PASSWORD`

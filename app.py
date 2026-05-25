@@ -22,9 +22,9 @@ from flask_cors import CORS
 
 
 BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "portfolio.db"
-UPLOAD_DIR = BASE_DIR / "static" / "uploads"
-LOCAL_CONFIG_PATH = BASE_DIR / "local_config.json"
+DB_PATH = Path(os.getenv("PORTFOLIO_DB_PATH", str(BASE_DIR / "portfolio.db")))
+UPLOAD_DIR = Path(os.getenv("PORTFOLIO_UPLOAD_DIR", str(BASE_DIR / "static" / "uploads")))
+LOCAL_CONFIG_PATH = Path(os.getenv("PORTFOLIO_LOCAL_CONFIG_PATH", str(BASE_DIR / "local_config.json")))
 ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
 
 
