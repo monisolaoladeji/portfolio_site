@@ -22,9 +22,13 @@ from flask_cors import CORS
 
 
 BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = Path(os.getenv("PORTFOLIO_DB_PATH", str(BASE_DIR / "portfolio.db")))
-UPLOAD_DIR = Path(os.getenv("PORTFOLIO_UPLOAD_DIR", str(BASE_DIR / "static" / "uploads")))
-LOCAL_CONFIG_PATH = Path(os.getenv("PORTFOLIO_LOCAL_CONFIG_PATH", str(BASE_DIR / "local_config.json")))
+
+def _is_platform_runtime() -> bool:
+    return bool(os.getenv("VERCEL") or os.getenv("RENDER") or os.getenv("NETLIFY"))
+
+DB_PATH = Path(os.getenv("PORTFOLIO_DB_PATH", "/tmp/portfolio.db" if _is_platform_runtime() else str(BASE_DIR / "portfolio.db")))
+UPLOAD_DIR = Path(os.getenv("PORTFOLIO_UPLOAD_DIR", "/tmp/uploads" if _is_platform_runtime() else str(BASE_DIR / "static" / "uploads")))
+LOCAL_CONFIG_PATH = Path(os.getenv("PORTFOLIO_LOCAL_CONFIG_PATH", "/tmp/local_config.json" if _is_platform_runtime() else str(BASE_DIR / "local_config.json")))
 ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
 
 
@@ -44,9 +48,15 @@ def load_local_config() -> dict:
     }
 
     if not LOCAL_CONFIG_PATH.exists():
-        LOCAL_CONFIG_PATH.write_text(
-            json.dumps(default_config, indent=2), encoding="utf-8"
-        )
+        try:
+            LOCAL_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            LOCAL_CONFIG_PATH.write_text(
+                json.dumps(default_config, indent=2), encoding="utf-8"
+            )
+        except OSError:
+            # When deployed to platforms with read-only app storage,
+            # just use defaults and avoid creating the file.
+            pass
         return default_config
 
     try:
@@ -156,7 +166,11 @@ def close_db(_error):
 
 
 def init_db():
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             """
