@@ -1,7 +1,11 @@
-import os
+import hashlib
 import json
+import mimetypes
+import os
 import sqlite3
+import time
 import uuid
+import urllib.request
 import smtplib
 from datetime import datetime, timezone
 from email.message import EmailMessage
@@ -20,6 +24,8 @@ from flask import (
     url_for,
 )
 from flask_cors import CORS
+from bson.objectid import ObjectId
+from pymongo import MongoClient
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -31,6 +37,21 @@ DB_PATH = Path(os.getenv("PORTFOLIO_DB_PATH", "/tmp/portfolio.db" if _is_platfor
 UPLOAD_DIR = Path(os.getenv("PORTFOLIO_UPLOAD_DIR", "/tmp/uploads" if _is_platform_runtime() else str(BASE_DIR / "static" / "uploads")))
 LOCAL_CONFIG_PATH = Path(os.getenv("PORTFOLIO_LOCAL_CONFIG_PATH", "/tmp/local_config.json" if _is_platform_runtime() else str(BASE_DIR / "local_config.json")))
 ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
+
+MONGODB_URI = os.getenv("MONGODB_URI", "").strip()
+MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "portfolio_site").strip()
+if MONGODB_URI:
+    try:
+        mongo_client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
+        mongo_client.server_info()
+    except Exception as exc:
+        print(f"MongoDB connection failed: {exc}")
+        mongo_client = None
+else:
+    mongo_client = None
+
+mongo_db = mongo_client[MONGO_DB_NAME] if mongo_client else None
+visitor_messages_collection = mongo_db["visitor_messages"] if mongo_db else None
 
 
 def load_local_config() -> dict:
@@ -46,6 +67,9 @@ def load_local_config() -> dict:
         "SMTP_USE_TLS": True,
         "NOTIFY_TO_EMAIL": "",
         "NOTIFY_FROM_EMAIL": "",
+        "CLOUDINARY_CLOUD_NAME": "",
+        "CLOUDINARY_API_KEY": "",
+        "CLOUDINARY_API_SECRET": "",
     }
 
     if not LOCAL_CONFIG_PATH.exists():
@@ -81,10 +105,26 @@ def load_local_config() -> dict:
         "SMTP_USE_TLS": bool(file_config.get("SMTP_USE_TLS", default_config["SMTP_USE_TLS"])),
         "NOTIFY_TO_EMAIL": str(file_config.get("NOTIFY_TO_EMAIL", default_config["NOTIFY_TO_EMAIL"])),
         "NOTIFY_FROM_EMAIL": str(file_config.get("NOTIFY_FROM_EMAIL", default_config["NOTIFY_FROM_EMAIL"])),
+        "CLOUDINARY_CLOUD_NAME": str(file_config.get("CLOUDINARY_CLOUD_NAME", default_config["CLOUDINARY_CLOUD_NAME"])),
+        "CLOUDINARY_API_KEY": str(file_config.get("CLOUDINARY_API_KEY", default_config["CLOUDINARY_API_KEY"])),
+        "CLOUDINARY_API_SECRET": str(file_config.get("CLOUDINARY_API_SECRET", default_config["CLOUDINARY_API_SECRET"])),
     }
 
 
 local_config = load_local_config()
+
+CLOUDINARY_CLOUD_NAME = os.getenv(
+    "PORTFOLIO_CLOUDINARY_CLOUD_NAME", local_config["CLOUDINARY_CLOUD_NAME"]
+).strip()
+CLOUDINARY_API_KEY = os.getenv(
+    "PORTFOLIO_CLOUDINARY_API_KEY", local_config["CLOUDINARY_API_KEY"]
+).strip()
+CLOUDINARY_API_SECRET = os.getenv(
+    "PORTFOLIO_CLOUDINARY_API_SECRET", local_config["CLOUDINARY_API_SECRET"]
+).strip()
+CLOUDINARY_ENABLED = bool(
+    CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET
+)
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.getenv("PORTFOLIO_SECRET_KEY", local_config["SECRET_KEY"])
@@ -266,16 +306,84 @@ def allowed_image(filename: str) -> bool:
     return ext in ALLOWED_IMAGE_EXTENSIONS
 
 
+def _encode_multipart_formdata(fields, files):
+    boundary = uuid.uuid4().hex
+    body = bytearray()
+    for name, value in fields.items():
+        body.extend(f"--{boundary}\r\n".encode("utf-8"))
+        body.extend(f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("utf-8"))
+        body.extend(str(value).encode("utf-8"))
+        body.extend(b"\r\n")
+
+    for field_name, filename, file_data, content_type in files:
+        body.extend(f"--{boundary}\r\n".encode("utf-8"))
+        body.extend(
+            f'Content-Disposition: form-data; name="{field_name}"; filename="{filename}"\r\n'.encode("utf-8")
+        )
+        body.extend(f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"))
+        body.extend(file_data)
+        body.extend(b"\r\n")
+
+    body.extend(f"--{boundary}--\r\n".encode("utf-8"))
+    content_type_header = f"multipart/form-data; boundary={boundary}"
+    return bytes(body), content_type_header
+
+
+def upload_image_to_cloudinary(file_obj) -> str:
+    if not CLOUDINARY_ENABLED:
+        return ""
+
+    timestamp = int(time.time())
+    signature = hashlib.sha1(
+        f"timestamp={timestamp}{CLOUDINARY_API_SECRET}".encode("utf-8")
+    ).hexdigest()
+    upload_url = f"https://api.cloudinary.com/v1_1/{CLOUDINARY_CLOUD_NAME}/image/upload"
+
+    file_obj.stream.seek(0)
+    image_bytes = file_obj.read()
+    file_obj.stream.seek(0)
+    content_type = file_obj.mimetype or mimetypes.guess_type(file_obj.filename)[0] or "application/octet-stream"
+
+    fields = {
+        "api_key": CLOUDINARY_API_KEY,
+        "timestamp": str(timestamp),
+        "signature": signature,
+    }
+    files = [("file", file_obj.filename, image_bytes, content_type)]
+    body, content_type_header = _encode_multipart_formdata(fields, files)
+
+    request = urllib.request.Request(
+        upload_url,
+        data=body,
+        headers={"Content-Type": content_type_header},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            response_data = json.loads(response.read().decode("utf-8"))
+            return response_data.get("secure_url", "")
+    except Exception as exc:
+        print(f"Cloudinary upload failed: {exc}")
+        return ""
+
+
 def save_image(file_obj) -> str:
     if not file_obj or not getattr(file_obj, "filename", ""):
         return ""
     if not allowed_image(file_obj.filename):
         raise ValueError("Only image files are allowed.")
 
+    if CLOUDINARY_ENABLED:
+        cloudinary_url = upload_image_to_cloudinary(file_obj)
+        if cloudinary_url:
+            return cloudinary_url
+
     ext = file_obj.filename.rsplit(".", 1)[1].lower()
     filename = f"{uuid.uuid4().hex}.{ext}"
     dest_path = UPLOAD_DIR / filename
-    file_obj.save(dest_path)
+    try:
+        file_obj.save(dest_path)
+    except OSError as exc:
+        raise ValueError("Unable to save image.") from exc
     return filename
 
 
@@ -283,8 +391,12 @@ def normalize_upload_path(path: str) -> str:
     if not path:
         return ""
     normalized = path.replace("\\", "/")
+    if normalized.startswith("http://") or normalized.startswith("https://"):
+        return normalized
     if normalized.startswith("uploads/"):
         normalized = normalized.split("/", 1)[1]
+    if normalized.startswith("static/uploads/"):
+        normalized = normalized.split("/", 2)[-1]
     return normalized
 
 
@@ -292,6 +404,8 @@ def get_upload_url(path: str) -> str:
     normalized = normalize_upload_path(path)
     if not normalized:
         return ""
+    if normalized.startswith("http://") or normalized.startswith("https://"):
+        return normalized
     return url_for("uploaded_file", filename=normalized)
 
 
@@ -410,15 +524,26 @@ def submit_contact_message():
         return redirect(url_for("index", _anchor="contact"))
 
     created_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-    db = get_db()
-    db.execute(
-        """
-        INSERT INTO visitor_messages (sender_name, sender_email, message_body, created_at, is_read)
-        VALUES (?, ?, ?, ?, 0);
-        """,
-        (sender_name, sender_email, message_body, created_at),
-    )
-    db.commit()
+    if visitor_messages_collection:
+        visitor_messages_collection.insert_one(
+            {
+                "sender_name": sender_name,
+                "sender_email": sender_email,
+                "message_body": message_body,
+                "created_at": created_at,
+                "is_read": False,
+            }
+        )
+    else:
+        db = get_db()
+        db.execute(
+            """
+            INSERT INTO visitor_messages (sender_name, sender_email, message_body, created_at, is_read)
+            VALUES (?, ?, ?, ?, 0);
+            """,
+            (sender_name, sender_email, message_body, created_at),
+        )
+        db.commit()
 
     send_new_message_notification(sender_name, sender_email, message_body, created_at)
     flash("Thanks! Your message has been sent.", "success")
@@ -465,13 +590,29 @@ def admin_dashboard():
             **project,
             "screenshots": screenshots
         })
-    visitor_messages = db.execute(
-        """
-        SELECT id, sender_name, sender_email, message_body, created_at, is_read
-        FROM visitor_messages
-        ORDER BY id DESC;
-        """
-    ).fetchall()
+
+    if visitor_messages_collection:
+        visitor_messages = []
+        for doc in visitor_messages_collection.find().sort("_id", -1):
+            visitor_messages.append(
+                {
+                    "id": str(doc.get("_id")),
+                    "sender_name": doc.get("sender_name", ""),
+                    "sender_email": doc.get("sender_email", ""),
+                    "message_body": doc.get("message_body", ""),
+                    "created_at": doc.get("created_at", ""),
+                    "is_read": bool(doc.get("is_read", False)),
+                }
+            )
+    else:
+        visitor_messages = db.execute(
+            """
+            SELECT id, sender_name, sender_email, message_body, created_at, is_read
+            FROM visitor_messages
+            ORDER BY id DESC;
+            """
+        ).fetchall()
+
     settings = get_settings_map(db)
     return render_template(
         "admin_dashboard.html",
@@ -728,9 +869,18 @@ def update_contact_info():
     return redirect(url_for("admin_dashboard"))
 
 
-@app.post("/admin/messages/<int:message_id>/read")
+@app.post("/admin/messages/<message_id>/read")
 @admin_required
-def mark_message_as_read(message_id: int):
+def mark_message_as_read(message_id: str):
+    if visitor_messages_collection and ObjectId.is_valid(message_id):
+        result = visitor_messages_collection.update_one(
+            {"_id": ObjectId(message_id)},
+            {"$set": {"is_read": True}},
+        )
+        if result.modified_count:
+            flash("Message marked as read.", "success")
+            return redirect(url_for("admin_dashboard"))
+
     db = get_db()
     db.execute(
         "UPDATE visitor_messages SET is_read = 1 WHERE id = ?;",
@@ -741,9 +891,15 @@ def mark_message_as_read(message_id: int):
     return redirect(url_for("admin_dashboard"))
 
 
-@app.post("/admin/messages/<int:message_id>/delete")
+@app.post("/admin/messages/<message_id>/delete")
 @admin_required
-def delete_message(message_id: int):
+def delete_message(message_id: str):
+    if visitor_messages_collection and ObjectId.is_valid(message_id):
+        result = visitor_messages_collection.delete_one({"_id": ObjectId(message_id)})
+        if result.deleted_count:
+            flash("Message deleted.", "success")
+            return redirect(url_for("admin_dashboard"))
+
     db = get_db()
     db.execute("DELETE FROM visitor_messages WHERE id = ?;", (message_id,))
     db.commit()
