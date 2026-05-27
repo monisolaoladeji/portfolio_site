@@ -16,6 +16,7 @@ from flask import (
     Flask,
     flash,
     g,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -52,6 +53,11 @@ else:
 
 mongo_db = mongo_client[MONGO_DB_NAME] if mongo_client else None
 visitor_messages_collection = mongo_db["visitor_messages"] if mongo_db else None
+projects_collection = mongo_db["projects"] if mongo_db else None
+project_screenshots_collection = mongo_db["project_screenshots"] if mongo_db else None
+settings_collection = mongo_db["settings"] if mongo_db else None
+
+MONGODB_ENABLED = bool(mongo_db and projects_collection)
 
 
 def load_local_config() -> dict:
@@ -147,6 +153,63 @@ app.config["NOTIFY_FROM_EMAIL"] = local_config["NOTIFY_FROM_EMAIL"]
 CORS(app)
 
 
+def init_mongodb_collections():
+    if not MONGODB_ENABLED:
+        return
+    
+    if "projects" not in mongo_db.list_collection_names():
+        projects_collection.create_index("sort_order")
+    
+    if "project_screenshots" not in mongo_db.list_collection_names():
+        project_screenshots_collection.create_index("project_id")
+    
+    if "settings" not in mongo_db.list_collection_names():
+        settings_collection.create_index("key", unique=True)
+    
+    project_count = projects_collection.count_documents({})
+    if project_count == 0:
+        for project in DEFAULT_PROJECTS:
+            projects_collection.insert_one({
+                "title": project["title"],
+                "description": project["description"],
+                "technologies": project["technologies"],
+                "github_url": project["github_url"],
+                "demo_url": project["demo_url"],
+                "screenshot_path": "",
+                "sort_order": project["sort_order"],
+            })
+    
+    setting_defaults = {
+        "profile_photo_path": "",
+        "contact_email": "",
+        "contact_phone": "",
+        "contact_location": "",
+        "contact_linkedin": "",
+        "contact_github": "",
+    }
+    for key, value in setting_defaults.items():
+        settings_collection.update_one(
+            {"key": key},
+            {"$setOnInsert": {"key": key, "value": value}},
+            upsert=True
+        )
+
+
+def get_settings_map_mongo():
+    settings = {}
+    for doc in settings_collection.find({}):
+        settings[doc["key"]] = doc.get("value", "")
+    return settings
+
+
+def get_project_screenshots_mongo(project_id):
+    docs = project_screenshots_collection.find(
+        {"project_id": project_id},
+        sort=[("sort_order", 1), ("_id", 1)]
+    )
+    return [{"id": str(doc["_id"]), "image_path": doc["image_path"], "caption": doc.get("caption", ""), "sort_order": doc.get("sort_order", 0)} for doc in docs]
+
+
 DEFAULT_PROJECTS = [
     {
         "title": "Finance Tracker",
@@ -211,6 +274,11 @@ def init_db():
         UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     except OSError:
         pass
+    
+    if MONGODB_ENABLED:
+        init_mongodb_collections()
+        return
+    
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
@@ -294,7 +362,11 @@ def init_db():
             )
 
 
-def get_settings_map(db):
+def get_settings_map(db=None):
+    if MONGODB_ENABLED:
+        return get_settings_map_mongo()
+    if db is None:
+        db = get_db()
     rows = db.execute("SELECT key, value FROM settings;").fetchall()
     return {row["key"]: row["value"] for row in rows}
 
@@ -471,7 +543,15 @@ def send_new_message_notification(sender_name: str, sender_email: str, message_b
         return False
 
 
-def get_project_screenshots(db, project_id):
+def get_project_screenshots(db_or_project_id, project_id=None):
+    if MONGODB_ENABLED:
+        project_id_to_use = db_or_project_id if project_id is None else project_id
+        return get_project_screenshots_mongo(project_id_to_use)
+    
+    db = db_or_project_id
+    if project_id is None:
+        raise ValueError("project_id required for SQLite fallback")
+    
     return db.execute(
         """
         SELECT id, image_path, caption, sort_order
@@ -485,22 +565,35 @@ def get_project_screenshots(db, project_id):
 
 @app.route("/")
 def index():
-    db = get_db()
-    projects = db.execute(
-        """
-        SELECT id, title, description, technologies, github_url, demo_url, screenshot_path
-        FROM projects
-        ORDER BY sort_order ASC, id ASC;
-        """
-    ).fetchall()
-    projects_with_screenshots = []
-    for project in projects:
-        screenshots = get_project_screenshots(db, project["id"])
-        projects_with_screenshots.append({
-            **project,
-            "screenshots": screenshots
-        })
-    settings = get_settings_map(db)
+    if MONGODB_ENABLED:
+        projects = list(projects_collection.find({}, sort=[("sort_order", 1), ("_id", 1)]))
+        projects_with_screenshots = []
+        for project in projects:
+            project["id"] = str(project["_id"])
+            screenshots = get_project_screenshots_mongo(str(project["_id"]))
+            projects_with_screenshots.append({
+                **project,
+                "screenshots": screenshots
+            })
+        settings = get_settings_map_mongo()
+    else:
+        db = get_db()
+        projects = db.execute(
+            """
+            SELECT id, title, description, technologies, github_url, demo_url, screenshot_path
+            FROM projects
+            ORDER BY sort_order ASC, id ASC;
+            """
+        ).fetchall()
+        projects_with_screenshots = []
+        for project in projects:
+            screenshots = get_project_screenshots(db, project["id"])
+            projects_with_screenshots.append({
+                **project,
+                "screenshots": screenshots
+            })
+        settings = get_settings_map(db)
+    
     return render_template(
         "index.html",
         projects=projects_with_screenshots,
@@ -575,21 +668,32 @@ def admin_logout():
 @app.route("/admin", methods=["GET"])
 @admin_required
 def admin_dashboard():
-    db = get_db()
-    projects = db.execute(
-        """
-        SELECT id, title, description, technologies, github_url, demo_url, screenshot_path, sort_order
-        FROM projects
-        ORDER BY sort_order ASC, id ASC;
-        """
-    ).fetchall()
-    projects_with_screenshots = []
-    for project in projects:
-        screenshots = get_project_screenshots(db, project["id"])
-        projects_with_screenshots.append({
-            **project,
-            "screenshots": screenshots
-        })
+    if MONGODB_ENABLED:
+        projects = list(projects_collection.find({}, sort=[("sort_order", 1), ("_id", 1)]))
+        projects_with_screenshots = []
+        for project in projects:
+            project["id"] = str(project["_id"])
+            screenshots = get_project_screenshots_mongo(str(project["_id"]))
+            projects_with_screenshots.append({
+                **project,
+                "screenshots": screenshots
+            })
+    else:
+        db = get_db()
+        projects = db.execute(
+            """
+            SELECT id, title, description, technologies, github_url, demo_url, screenshot_path, sort_order
+            FROM projects
+            ORDER BY sort_order ASC, id ASC;
+            """
+        ).fetchall()
+        projects_with_screenshots = []
+        for project in projects:
+            screenshots = get_project_screenshots(db, project["id"])
+            projects_with_screenshots.append({
+                **project,
+                "screenshots": screenshots
+            })
 
     if visitor_messages_collection:
         visitor_messages = []
@@ -605,6 +709,7 @@ def admin_dashboard():
                 }
             )
     else:
+        db = get_db()
         visitor_messages = db.execute(
             """
             SELECT id, sender_name, sender_email, message_body, created_at, is_read
@@ -613,7 +718,12 @@ def admin_dashboard():
             """
         ).fetchall()
 
-    settings = get_settings_map(db)
+    if MONGODB_ENABLED:
+        settings = get_settings_map_mongo()
+    else:
+        db = get_db()
+        settings = get_settings_map(db)
+    
     return render_template(
         "admin_dashboard.html",
         projects=projects_with_screenshots,
@@ -621,6 +731,14 @@ def admin_dashboard():
         profile_photo_path=settings.get("profile_photo_path", ""),
         settings=settings,
         admin_username=app.config["ADMIN_USERNAME"],
+    )
+
+
+def update_setting_mongo(key, value):
+    settings_collection.update_one(
+        {"key": key},
+        {"$set": {"key": key, "value": value}},
+        upsert=True
     )
 
 
@@ -706,11 +824,15 @@ def update_profile_photo():
         flash(str(exc), "error")
         return redirect(url_for("admin_dashboard"))
 
-    db = get_db()
-    db.execute(
-        "UPDATE settings SET value = ? WHERE key = 'profile_photo_path';", (photo_path,)
-    )
-    db.commit()
+    if MONGODB_ENABLED:
+        update_setting_mongo("profile_photo_path", photo_path)
+    else:
+        db = get_db()
+        db.execute(
+            "UPDATE settings SET value = ? WHERE key = 'profile_photo_path';", (photo_path,)
+        )
+        db.commit()
+    
     flash("Profile photo updated.", "success")
     return redirect(url_for("admin_dashboard"))
 
@@ -846,7 +968,6 @@ def update_contact_info():
     contact_linkedin = (request.form.get("contact_linkedin") or "").strip()
     contact_github = (request.form.get("contact_github") or "").strip()
 
-    db = get_db()
     updates = {
         "contact_email": contact_email,
         "contact_phone": contact_phone,
@@ -854,9 +975,15 @@ def update_contact_info():
         "contact_linkedin": contact_linkedin,
         "contact_github": contact_github,
     }
-    for key, value in updates.items():
-        db.execute("UPDATE settings SET value = ? WHERE key = ?;", (value, key))
-    db.commit()
+    
+    if MONGODB_ENABLED:
+        for key, value in updates.items():
+            update_setting_mongo(key, value)
+    else:
+        db = get_db()
+        for key, value in updates.items():
+            db.execute("UPDATE settings SET value = ? WHERE key = ?;", (value, key))
+        db.commit()
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({
