@@ -57,7 +57,7 @@ projects_collection = mongo_db["projects"] if mongo_db is not None else None
 project_screenshots_collection = mongo_db["project_screenshots"] if mongo_db is not None else None
 settings_collection = mongo_db["settings"] if mongo_db is not None else None
 
-MONGODB_ENABLED = bool(mongo_db and projects_collection)
+MONGODB_ENABLED = mongo_db is not None and projects_collection is not None
 
 
 def load_local_config() -> dict:
