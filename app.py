@@ -438,25 +438,19 @@ def upload_image_to_cloudinary(file_obj) -> str:
         return ""
 
 
+
 def save_image(file_obj) -> str:
     if not file_obj or not getattr(file_obj, "filename", ""):
         return ""
+
     if not allowed_image(file_obj.filename):
         raise ValueError("Only image files are allowed.")
 
-    if CLOUDINARY_ENABLED:
-        cloudinary_url = upload_image_to_cloudinary(file_obj)
-        if cloudinary_url:
-            return cloudinary_url
+    cloudinary_url = upload_image_to_cloudinary(file_obj)
+    if cloudinary_url:
+        return cloudinary_url
 
-    ext = file_obj.filename.rsplit(".", 1)[1].lower()
-    filename = f"{uuid.uuid4().hex}.{ext}"
-    dest_path = UPLOAD_DIR / filename
-    try:
-        file_obj.save(dest_path)
-    except OSError as exc:
-        raise ValueError("Unable to save image.") from exc
-    return filename
+    raise ValueError("Cloudinary upload failed. Check your API keys.")
 
 
 def normalize_upload_path(path: str) -> str:
