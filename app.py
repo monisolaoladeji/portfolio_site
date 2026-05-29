@@ -52,10 +52,10 @@ else:
     mongo_client = None
 
 mongo_db = mongo_client[MONGO_DB_NAME] if mongo_client else None
-visitor_messages_collection = mongo_db["visitor_messages"] if mongo_db else None
-projects_collection = mongo_db["projects"] if mongo_db else None
-project_screenshots_collection = mongo_db["project_screenshots"] if mongo_db else None
-settings_collection = mongo_db["settings"] if mongo_db else None
+visitor_messages_collection = mongo_db["visitor_messages"] if mongo_db is not None else None
+projects_collection = mongo_db["projects"] if mongo_db is not None else None
+project_screenshots_collection = mongo_db["project_screenshots"] if mongo_db is not None else None
+settings_collection = mongo_db["settings"] if mongo_db is not None else None
 
 MONGODB_ENABLED = bool(mongo_db and projects_collection)
 
