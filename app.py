@@ -753,6 +753,11 @@ def update_setting_mongo(key, value):
 @app.post("/admin/projects/<project_id>/screenshots/add")
 @admin_required
 def add_project_screenshot(project_id):
+    print(f"=== add_project_screenshot called ===")
+    print(f"Project ID: {project_id}")
+    print(f"MONGODB_ENABLED: {MONGODB_ENABLED}")
+    print(f"CLOUDINARY_ENABLED: {CLOUDINARY_ENABLED}")
+    
     screenshot = request.files.get("screenshot")
     caption = (request.form.get("caption") or "").strip()
     sort_order = int((request.form.get("sort_order") or "999").strip())
@@ -764,8 +769,11 @@ def add_project_screenshot(project_id):
         return redirect(url_for("admin_dashboard"))
     
     try:
+        print("Saving image...")
         image_path = save_image(screenshot)
+        print(f"Image saved to: {image_path}")
     except ValueError as exc:
+        print(f"Error saving image: {exc}")
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({"success": False, "message": str(exc)}), 400
         flash(str(exc), "error")
@@ -773,19 +781,24 @@ def add_project_screenshot(project_id):
     
     if MONGODB_ENABLED:
         from bson.objectid import ObjectId
+        print("Using MongoDB")
         try:
             project_obj_id = ObjectId(project_id)
-        except:
+            print(f"Parsed project ID as ObjectId: {project_obj_id}")
+        except Exception as e:
+            print(f"Error parsing project ID: {e}")
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return jsonify({"success": False, "message": "Project not found."}), 404
             flash("Project not found.", "error")
             return redirect(url_for("admin_dashboard"))
         existing = projects_collection.find_one({"_id": project_obj_id})
+        print(f"Found existing project: {existing is not None}")
         if not existing:
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return jsonify({"success": False, "message": "Project not found."}), 404
             flash("Project not found.", "error")
             return redirect(url_for("admin_dashboard"))
+        print("Inserting screenshot into MongoDB...")
         screenshot_doc = project_screenshots_collection.insert_one({
             "project_id": str(project_obj_id),
             "image_path": image_path,
@@ -793,6 +806,7 @@ def add_project_screenshot(project_id):
             "sort_order": sort_order
         })
         screenshot_id = str(screenshot_doc.inserted_id)
+        print(f"Inserted screenshot with ID: {screenshot_id}")
     else:
         db = get_db()
         existing = db.execute("SELECT id FROM projects WHERE id = ?;", (project_id,)).fetchone()
@@ -920,9 +934,9 @@ def create_project():
     return redirect(url_for("admin_dashboard"))
 
 
-@app.post("/admin/projects/<int:project_id>/update")
+@app.post("/admin/projects/<project_id>/update")
 @admin_required
-def update_project(project_id: int):
+def update_project(project_id):
     title = (request.form.get("title") or "").strip()
     description = (request.form.get("description") or "").strip()
     technologies = (request.form.get("technologies") or "").strip()
@@ -937,44 +951,85 @@ def update_project(project_id: int):
         flash("Title, description, and technologies are required.", "error")
         return redirect(url_for("admin_dashboard"))
 
-    db = get_db()
-    existing = db.execute(
-        "SELECT screenshot_path FROM projects WHERE id = ?;", (project_id,)
-    ).fetchone()
-    if not existing:
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return jsonify({"success": False, "message": "Project not found."}), 404
-        flash("Project not found.", "error")
-        return redirect(url_for("admin_dashboard"))
-
-    screenshot_path = existing["screenshot_path"]
-    if screenshot and screenshot.filename:
+    screenshot_path = ""
+    if MONGODB_ENABLED:
+        from bson.objectid import ObjectId
         try:
-            screenshot_path = save_image(screenshot)
-        except ValueError as exc:
+            project_obj_id = ObjectId(project_id)
+        except Exception as e:
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return jsonify({"success": False, "message": str(exc)}), 400
-            flash(str(exc), "error")
+                return jsonify({"success": False, "message": "Project not found."}), 404
+            flash("Project not found.", "error")
+            return redirect(url_for("admin_dashboard"))
+        
+        existing = projects_collection.find_one({"_id": project_obj_id})
+        if not existing:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({"success": False, "message": "Project not found."}), 404
+            flash("Project not found.", "error")
+            return redirect(url_for("admin_dashboard"))
+        
+        screenshot_path = existing.get("screenshot_path", "")
+        if screenshot and screenshot.filename:
+            try:
+                screenshot_path = save_image(screenshot)
+            except ValueError as exc:
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return jsonify({"success": False, "message": str(exc)}), 400
+                flash(str(exc), "error")
+                return redirect(url_for("admin_dashboard"))
+        
+        projects_collection.update_one(
+            {"_id": project_obj_id},
+            {"$set": {
+                "title": title,
+                "description": description,
+                "technologies": technologies,
+                "github_url": github_url,
+                "demo_url": demo_url,
+                "screenshot_path": screenshot_path,
+                "sort_order": sort_order
+            }}
+        )
+    else:
+        db = get_db()
+        existing = db.execute(
+            "SELECT screenshot_path FROM projects WHERE id = ?;", (project_id,)
+        ).fetchone()
+        if not existing:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({"success": False, "message": "Project not found."}), 404
+            flash("Project not found.", "error")
             return redirect(url_for("admin_dashboard"))
 
-    db.execute(
-        """
-        UPDATE projects
-        SET title = ?, description = ?, technologies = ?, github_url = ?, demo_url = ?, screenshot_path = ?, sort_order = ?
-        WHERE id = ?;
-        """,
-        (
-            title,
-            description,
-            technologies,
-            github_url,
-            demo_url,
-            screenshot_path,
-            sort_order,
-            project_id,
-        ),
-    )
-    db.commit()
+        screenshot_path = existing["screenshot_path"]
+        if screenshot and screenshot.filename:
+            try:
+                screenshot_path = save_image(screenshot)
+            except ValueError as exc:
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return jsonify({"success": False, "message": str(exc)}), 400
+                flash(str(exc), "error")
+                return redirect(url_for("admin_dashboard"))
+
+        db.execute(
+            """
+            UPDATE projects
+            SET title = ?, description = ?, technologies = ?, github_url = ?, demo_url = ?, screenshot_path = ?, sort_order = ?
+            WHERE id = ?;
+            """,
+            (
+                title,
+                description,
+                technologies,
+                github_url,
+                demo_url,
+                screenshot_path,
+                sort_order,
+                project_id,
+            ),
+        )
+        db.commit()
     
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({
@@ -996,12 +1051,27 @@ def update_project(project_id: int):
     return redirect(url_for("admin_dashboard"))
 
 
-@app.post("/admin/projects/<int:project_id>/delete")
+@app.post("/admin/projects/<project_id>/delete")
 @admin_required
-def delete_project(project_id: int):
-    db = get_db()
-    db.execute("DELETE FROM projects WHERE id = ?;", (project_id,))
-    db.commit()
+def delete_project(project_id):
+    if MONGODB_ENABLED:
+        from bson.objectid import ObjectId
+        try:
+            project_obj_id = ObjectId(project_id)
+            projects_collection.delete_one({"_id": project_obj_id})
+            project_screenshots_collection.delete_many({"project_id": str(project_obj_id)})
+        except Exception as e:
+            pass
+    else:
+        db = get_db()
+        db.execute("DELETE FROM projects WHERE id = ?;", (project_id,))
+        db.commit()
+    
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({
+            "success": True,
+            "message": "Project deleted."
+        })
     flash("Project deleted.", "success")
     return redirect(url_for("admin_dashboard"))
 
