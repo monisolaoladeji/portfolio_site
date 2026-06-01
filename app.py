@@ -12,6 +12,8 @@ from email.message import EmailMessage
 from functools import wraps
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from flask import (
     Flask,
     flash,
@@ -30,6 +32,9 @@ from pymongo import MongoClient
 
 
 BASE_DIR = Path(__file__).resolve().parent
+
+# Load environment variables from .env file (for local development)
+load_dotenv()
 
 def _is_platform_runtime() -> bool:
     return bool(os.getenv("VERCEL") or os.getenv("RENDER") or os.getenv("NETLIFY"))
@@ -455,7 +460,11 @@ def save_image(file_obj) -> str:
     if cloudinary_url:
         return cloudinary_url
 
-    raise ValueError("Cloudinary upload failed. Check your API keys.")
+    # Fall back to local storage if Cloudinary fails or isn't configured
+    ext = Path(file_obj.filename).suffix
+    filename = f"{uuid.uuid4().hex}{ext}"
+    file_obj.save(UPLOAD_DIR / filename)
+    return f"uploads/{filename}"
 
 
 def normalize_upload_path(path: str) -> str:
