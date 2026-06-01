@@ -484,6 +484,15 @@ def normalize_upload_path(path: str) -> str:
     return normalized
 
 
+def ensure_https(url: str) -> str:
+    if not url or url == "#":
+        return url
+    url = url.strip()
+    if not url.startswith("http://") and not url.startswith("https://"):
+        return "https://" + url
+    return url
+
+
 def get_upload_url(path: str) -> str:
     normalized = normalize_upload_path(path)
     if not normalized:
@@ -583,6 +592,8 @@ def index():
         projects_with_screenshots = []
         for project in projects:
             project["id"] = str(project["_id"])
+            project["demo_url"] = ensure_https(project.get("demo_url", ""))
+            project["github_url"] = ensure_https(project.get("github_url", ""))
             screenshots = get_project_screenshots_mongo(str(project["_id"]))
             projects_with_screenshots.append({
                 **project,
@@ -600,9 +611,12 @@ def index():
         ).fetchall()
         projects_with_screenshots = []
         for project in projects:
+            project_dict = dict(project)
+            project_dict["demo_url"] = ensure_https(project_dict.get("demo_url", ""))
+            project_dict["github_url"] = ensure_https(project_dict.get("github_url", ""))
             screenshots = get_project_screenshots(db, project["id"])
             projects_with_screenshots.append({
-                **project,
+                **project_dict,
                 "screenshots": screenshots
             })
         settings = get_settings_map(db)
@@ -687,6 +701,8 @@ def admin_dashboard():
         projects_with_screenshots = []
         for project in projects:
             project["id"] = str(project["_id"])
+            project["demo_url"] = ensure_https(project.get("demo_url", ""))
+            project["github_url"] = ensure_https(project.get("github_url", ""))
             screenshots = get_project_screenshots_mongo(str(project["_id"]))
             projects_with_screenshots.append({
                 **project,
@@ -703,9 +719,12 @@ def admin_dashboard():
         ).fetchall()
         projects_with_screenshots = []
         for project in projects:
+            project_dict = dict(project)
+            project_dict["demo_url"] = ensure_https(project_dict.get("demo_url", ""))
+            project_dict["github_url"] = ensure_https(project_dict.get("github_url", ""))
             screenshots = get_project_screenshots(db, project["id"])
             projects_with_screenshots.append({
-                **project,
+                **project_dict,
                 "screenshots": screenshots
             })
 
@@ -917,8 +936,8 @@ def create_project():
     title = (request.form.get("title") or "").strip()
     description = (request.form.get("description") or "").strip()
     technologies = (request.form.get("technologies") or "").strip()
-    github_url = (request.form.get("github_url") or "").strip() or "#"
-    demo_url = (request.form.get("demo_url") or "").strip() or "#"
+    github_url = ensure_https((request.form.get("github_url") or "").strip() or "#")
+    demo_url = ensure_https((request.form.get("demo_url") or "").strip() or "#")
     sort_order = int((request.form.get("sort_order") or "999").strip())
     screenshot = request.files.get("screenshot")
 
@@ -972,8 +991,8 @@ def update_project(project_id):
     title = (request.form.get("title") or "").strip()
     description = (request.form.get("description") or "").strip()
     technologies = (request.form.get("technologies") or "").strip()
-    github_url = (request.form.get("github_url") or "").strip() or "#"
-    demo_url = (request.form.get("demo_url") or "").strip() or "#"
+    github_url = ensure_https((request.form.get("github_url") or "").strip() or "#")
+    demo_url = ensure_https((request.form.get("demo_url") or "").strip() or "#")
     sort_order = int((request.form.get("sort_order") or "999").strip())
     screenshot = request.files.get("screenshot")
 
