@@ -625,7 +625,7 @@ def submit_contact_message():
         return redirect(url_for("index", _anchor="contact"))
 
     created_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-    if visitor_messages_collection:
+    if visitor_messages_collection is not None:
         visitor_messages_collection.insert_one(
             {
                 "sender_name": sender_name,
@@ -703,7 +703,7 @@ def admin_dashboard():
                 "screenshots": screenshots
             })
 
-    if visitor_messages_collection:
+    if visitor_messages_collection is not None:
         visitor_messages = []
         for doc in visitor_messages_collection.find().sort("_id", -1):
             visitor_messages.append(
@@ -1007,7 +1007,7 @@ def update_contact_info():
 @app.post("/admin/messages/<message_id>/read")
 @admin_required
 def mark_message_as_read(message_id: str):
-    if visitor_messages_collection and ObjectId.is_valid(message_id):
+    if visitor_messages_collection is not None and ObjectId.is_valid(message_id):
         result = visitor_messages_collection.update_one(
             {"_id": ObjectId(message_id)},
             {"$set": {"is_read": True}},
@@ -1029,7 +1029,7 @@ def mark_message_as_read(message_id: str):
 @app.post("/admin/messages/<message_id>/delete")
 @admin_required
 def delete_message(message_id: str):
-    if visitor_messages_collection and ObjectId.is_valid(message_id):
+    if visitor_messages_collection is not None and ObjectId.is_valid(message_id):
         result = visitor_messages_collection.delete_one({"_id": ObjectId(message_id)})
         if result.deleted_count:
             flash("Message deleted.", "success")
