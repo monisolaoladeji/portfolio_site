@@ -1,0 +1,25 @@
+# Environment variables
+.env
+
+# Local config
+local_config.json
+
+# Database files
+portfolio.db
+
+# Uploads directory (if not using Cloudinary
+static/uploads/*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

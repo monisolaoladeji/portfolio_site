@@ -301,6 +301,15 @@
           const formData = new FormData(form);
           const submitBtn = form.querySelector('button[type="submit"]');
           const originalText = submitBtn.textContent;
+          const projectCard = form.closest('.project-card');
+          let screenshotList = projectCard.querySelector('.screenshot-list');
+          
+          if (!screenshotList) {
+            const screenshotManagement = projectCard.querySelector('.screenshot-management');
+            screenshotList = document.createElement('div');
+            screenshotList.className = 'screenshot-list';
+            screenshotManagement.appendChild(screenshotList);
+          }
           
           submitBtn.disabled = true;
           submitBtn.textContent = 'Adding...';
@@ -319,6 +328,51 @@
             if (result.success) {
               showFlashMessage(result.message, 'success');
               form.reset();
+              
+              // Add new screenshot to the DOM
+              const screenshotDiv = document.createElement('div');
+              screenshotDiv.className = 'screenshot-admin-item';
+              
+              let uploadUrlScript = `
+                function getUploadUrl(path) {
+                  if (!path) return '';
+                  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+                  let normalized = path.replace(/\\\\/g, '/');
+                  if (normalized.startsWith('uploads/')) normalized = normalized.split('/', 1)[1];
+                  if (normalized.startsWith('static/uploads/')) normalized = normalized.split('/', 2)[2];
+                  return '/uploads/' + normalized;
+                }
+              `;
+              
+              let captionHtml = '';
+              if (result.screenshot.caption) {
+                captionHtml = `<p><strong>Caption:</strong> ${result.screenshot.caption}</p>`;
+              }
+              
+              // Build the delete form action URL
+              const actionParts = form.action.split('/');
+              actionParts.pop();
+              actionParts.push(result.screenshot.id);
+              actionParts.push('delete');
+              const deleteAction = actionParts.join('/');
+              
+              screenshotDiv.innerHTML = `
+                <img src="${result.screenshot.image_path.startsWith('http') ? result.screenshot.image_path : '/uploads/' + (result.screenshot.image_path.startsWith('uploads/') ? result.screenshot.image_path.split('/')[1] : result.screenshot.image_path)}" alt="Screenshot">
+                <div class="screenshot-admin-details">
+                  ${captionHtml}
+                  <p><strong>Sort Order:</strong> ${result.screenshot.sort_order}</p>
+                  <form method="post" action="${deleteAction}" onsubmit="return confirm('Delete this screenshot?');">
+                    <button class="btn btn-outline" type="submit">Delete Screenshot</button>
+                  </form>
+                </div>
+              `;
+              
+              screenshotList.appendChild(screenshotDiv);
+              
+              // Re-attach delete event listener to the new form
+              const deleteForm = screenshotDiv.querySelector('form');
+              attachScreenshotDeleteListener(deleteForm);
+              
             } else {
               showFlashMessage(result.message, 'error');
             }
@@ -330,9 +384,8 @@
           }
         });
       });
-
-      const screenshotDeleteForms = document.querySelectorAll('form[action*="/screenshots/"][action*="/delete"]');
-      screenshotDeleteForms.forEach(form => {
+      
+      function attachScreenshotDeleteListener(form) {
         form.addEventListener('submit', async (e) => {
           e.preventDefault();
           
@@ -368,6 +421,11 @@
             submitBtn.textContent = originalText;
           }
         });
+      }
+
+      const screenshotDeleteForms = document.querySelectorAll('form[action*="/screenshots/"][action*="/delete"]');
+      screenshotDeleteForms.forEach(form => {
+        attachScreenshotDeleteListener(form);
       });
 
       const existingFlashes = document.querySelectorAll('.flash');

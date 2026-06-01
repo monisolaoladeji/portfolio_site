@@ -750,9 +750,9 @@ def update_setting_mongo(key, value):
     )
 
 
-@app.post("/admin/projects/<int:project_id>/screenshots/add")
+@app.post("/admin/projects/<project_id>/screenshots/add")
 @admin_required
-def add_project_screenshot(project_id: int):
+def add_project_screenshot(project_id):
     screenshot = request.files.get("screenshot")
     caption = (request.form.get("caption") or "").strip()
     sort_order = int((request.form.get("sort_order") or "999").strip())
@@ -763,14 +763,6 @@ def add_project_screenshot(project_id: int):
         flash("Please choose a screenshot.", "error")
         return redirect(url_for("admin_dashboard"))
     
-    db = get_db()
-    existing = db.execute("SELECT id FROM projects WHERE id = ?;", (project_id,)).fetchone()
-    if not existing:
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return jsonify({"success": False, "message": "Project not found."}), 404
-        flash("Project not found.", "error")
-        return redirect(url_for("admin_dashboard"))
-    
     try:
         image_path = save_image(screenshot)
     except ValueError as exc:
@@ -779,18 +771,50 @@ def add_project_screenshot(project_id: int):
         flash(str(exc), "error")
         return redirect(url_for("admin_dashboard"))
     
-    db.execute(
-        "INSERT INTO project_screenshots (project_id, image_path, caption, sort_order) VALUES (?, ?, ?, ?);",
-        (project_id, image_path, caption, sort_order),
-    )
-    db.commit()
+    if MONGODB_ENABLED:
+        from bson.objectid import ObjectId
+        try:
+            project_obj_id = ObjectId(project_id)
+        except:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({"success": False, "message": "Project not found."}), 404
+            flash("Project not found.", "error")
+            return redirect(url_for("admin_dashboard"))
+        existing = projects_collection.find_one({"_id": project_obj_id})
+        if not existing:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({"success": False, "message": "Project not found."}), 404
+            flash("Project not found.", "error")
+            return redirect(url_for("admin_dashboard"))
+        screenshot_doc = project_screenshots_collection.insert_one({
+            "project_id": str(project_obj_id),
+            "image_path": image_path,
+            "caption": caption,
+            "sort_order": sort_order
+        })
+        screenshot_id = str(screenshot_doc.inserted_id)
+    else:
+        db = get_db()
+        existing = db.execute("SELECT id FROM projects WHERE id = ?;", (project_id,)).fetchone()
+        if not existing:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({"success": False, "message": "Project not found."}), 404
+            flash("Project not found.", "error")
+            return redirect(url_for("admin_dashboard"))
+        
+        db.execute(
+            "INSERT INTO project_screenshots (project_id, image_path, caption, sort_order) VALUES (?, ?, ?, ?);",
+            (project_id, image_path, caption, sort_order),
+        )
+        db.commit()
+        screenshot_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
     
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({
             "success": True,
             "message": "Screenshot added.",
             "screenshot": {
-                "id": db.execute("SELECT last_insert_rowid()").fetchone()[0],
+                "id": screenshot_id,
                 "image_path": image_path,
                 "caption": caption,
                 "sort_order": sort_order
@@ -801,12 +825,27 @@ def add_project_screenshot(project_id: int):
     return redirect(url_for("admin_dashboard"))
 
 
-@app.post("/admin/projects/<int:project_id>/screenshots/<int:screenshot_id>/delete")
+@app.post("/admin/projects/<project_id>/screenshots/<screenshot_id>/delete")
 @admin_required
-def delete_project_screenshot(project_id: int, screenshot_id: int):
-    db = get_db()
-    db.execute("DELETE FROM project_screenshots WHERE id = ? AND project_id = ?;", (screenshot_id, project_id))
-    db.commit()
+def delete_project_screenshot(project_id, screenshot_id):
+    if MONGODB_ENABLED:
+        from bson.objectid import ObjectId
+        try:
+            project_obj_id = ObjectId(project_id)
+            screenshot_obj_id = ObjectId(screenshot_id)
+        except:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({"success": False, "message": "Invalid ID."}), 400
+            flash("Invalid ID.", "error")
+            return redirect(url_for("admin_dashboard"))
+        project_screenshots_collection.delete_one({
+            "_id": screenshot_obj_id,
+            "project_id": str(project_obj_id)
+        })
+    else:
+        db = get_db()
+        db.execute("DELETE FROM project_screenshots WHERE id = ? AND project_id = ?;", (screenshot_id, project_id))
+        db.commit()
     
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({
