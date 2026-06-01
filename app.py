@@ -63,6 +63,10 @@ project_screenshots_collection = mongo_db["project_screenshots"] if mongo_db is 
 settings_collection = mongo_db["settings"] if mongo_db is not None else None
 
 MONGODB_ENABLED = mongo_db is not None and projects_collection is not None
+print("="*50)
+print(f"MONGODB_URI: {MONGODB_URI[:20]}..." if MONGODB_URI else "MONGODB_URI not set!")
+print(f"MONGODB_ENABLED: {MONGODB_ENABLED}")
+print("="*50)
 
 
 def load_local_config() -> dict:
@@ -573,6 +577,7 @@ def get_project_screenshots(db_or_project_id, project_id=None):
 
 @app.route("/")
 def index():
+    print(f"[INDEX PAGE] MONGODB_ENABLED = {MONGODB_ENABLED}")
     if MONGODB_ENABLED:
         projects = list(projects_collection.find({}, sort=[("sort_order", 1), ("_id", 1)]))
         projects_with_screenshots = []
@@ -676,6 +681,7 @@ def admin_logout():
 @app.route("/admin", methods=["GET"])
 @admin_required
 def admin_dashboard():
+    print(f"[ADMIN DASHBOARD] MONGODB_ENABLED = {MONGODB_ENABLED}")
     if MONGODB_ENABLED:
         projects = list(projects_collection.find({}, sort=[("sort_order", 1), ("_id", 1)]))
         projects_with_screenshots = []
@@ -753,7 +759,8 @@ def update_setting_mongo(key, value):
 @app.post("/admin/projects/<project_id>/screenshots/add")
 @admin_required
 def add_project_screenshot(project_id):
-    print(f"=== add_project_screenshot called ===")
+    print("="*60)
+    print(f"=== ADD SCREENSHOT ===")
     print(f"Project ID: {project_id}")
     print(f"MONGODB_ENABLED: {MONGODB_ENABLED}")
     print(f"CLOUDINARY_ENABLED: {CLOUDINARY_ENABLED}")
@@ -806,7 +813,9 @@ def add_project_screenshot(project_id):
             "sort_order": sort_order
         })
         screenshot_id = str(screenshot_doc.inserted_id)
-        print(f"Inserted screenshot with ID: {screenshot_id}")
+        print(f"[MONGODB] Inserted screenshot with ID: {screenshot_id}")
+        print(f"[MONGODB] Image path: {image_path}")
+        print("="*60)
     else:
         db = get_db()
         existing = db.execute("SELECT id FROM projects WHERE id = ?;", (project_id,)).fetchone()
@@ -901,6 +910,10 @@ def update_profile_photo():
 @app.post("/admin/projects/create")
 @admin_required
 def create_project():
+    print("="*60)
+    print(f"=== CREATE PROJECT ===")
+    print(f"MONGODB_ENABLED: {MONGODB_ENABLED}")
+    
     title = (request.form.get("title") or "").strip()
     description = (request.form.get("description") or "").strip()
     technologies = (request.form.get("technologies") or "").strip()
@@ -921,15 +934,30 @@ def create_project():
             flash(str(exc), "error")
             return redirect(url_for("admin_dashboard"))
 
-    db = get_db()
-    db.execute(
-        """
-        INSERT INTO projects (title, description, technologies, github_url, demo_url, screenshot_path, sort_order)
-        VALUES (?, ?, ?, ?, ?, ?, ?);
-        """,
-        (title, description, technologies, github_url, demo_url, screenshot_path, sort_order),
-    )
-    db.commit()
+    if MONGODB_ENABLED:
+        print(f"[MONGODB] Creating project with title: {title}, demo_url: {demo_url}")
+        projects_collection.insert_one({
+            "title": title,
+            "description": description,
+            "technologies": technologies,
+            "github_url": github_url,
+            "demo_url": demo_url,
+            "screenshot_path": screenshot_path,
+            "sort_order": sort_order
+        })
+        print(f"[MONGODB] Project created successfully!")
+    else:
+        db = get_db()
+        db.execute(
+            """
+            INSERT INTO projects (title, description, technologies, github_url, demo_url, screenshot_path, sort_order)
+            VALUES (?, ?, ?, ?, ?, ?, ?);
+            """,
+            (title, description, technologies, github_url, demo_url, screenshot_path, sort_order),
+        )
+        db.commit()
+    print("="*60)
+    
     flash("Project added.", "success")
     return redirect(url_for("admin_dashboard"))
 
@@ -937,6 +965,10 @@ def create_project():
 @app.post("/admin/projects/<project_id>/update")
 @admin_required
 def update_project(project_id):
+    print("="*60)
+    print(f"=== UPDATE PROJECT ===")
+    print(f"Project ID: {project_id}")
+    print(f"MONGODB_ENABLED: {MONGODB_ENABLED}")
     title = (request.form.get("title") or "").strip()
     description = (request.form.get("description") or "").strip()
     technologies = (request.form.get("technologies") or "").strip()
@@ -979,6 +1011,7 @@ def update_project(project_id):
                 flash(str(exc), "error")
                 return redirect(url_for("admin_dashboard"))
         
+        print(f"[MONGODB] Updating project with demo_url: {demo_url}")
         projects_collection.update_one(
             {"_id": project_obj_id},
             {"$set": {
@@ -991,6 +1024,8 @@ def update_project(project_id):
                 "sort_order": sort_order
             }}
         )
+        print(f"[MONGODB] Project updated successfully!")
+        print("="*60)
     else:
         db = get_db()
         existing = db.execute(
@@ -1054,18 +1089,26 @@ def update_project(project_id):
 @app.post("/admin/projects/<project_id>/delete")
 @admin_required
 def delete_project(project_id):
+    print("="*60)
+    print(f"=== DELETE PROJECT ===")
+    print(f"Project ID: {project_id}")
+    print(f"MONGODB_ENABLED: {MONGODB_ENABLED}")
     if MONGODB_ENABLED:
         from bson.objectid import ObjectId
         try:
             project_obj_id = ObjectId(project_id)
+            print(f"[MONGODB] Deleting project {project_obj_id}")
             projects_collection.delete_one({"_id": project_obj_id})
             project_screenshots_collection.delete_many({"project_id": str(project_obj_id)})
+            print(f"[MONGODB] Project and screenshots deleted successfully!")
         except Exception as e:
+            print(f"[MONGODB] Error deleting project: {e}")
             pass
     else:
         db = get_db()
         db.execute("DELETE FROM projects WHERE id = ?;", (project_id,))
         db.commit()
+    print("="*60)
     
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({
